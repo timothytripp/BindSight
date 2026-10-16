@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import DeviceImage from "./DeviceImage.vue";
-import { deviceKey, deviceName } from "../devices";
+import { liveDeviceKey, deviceKey, deviceName } from "../devices";
 import Icon from "./Icon.vue";
 import Splitter from "./Splitter.vue";
 import { persistedRef } from "../persist";
@@ -253,7 +253,7 @@ function onReset(i: number) {
           v-if="t.view && imgSrc(t.view.map.id, t.view.map.image.file)"
           :map="t.view.map"
           :src="imgSrc(t.view.map.id, t.view.map.image.file)"
-          :active="activeFor(t.device.sdl_guid)"
+          :active="activeFor(liveDeviceKey(t.device))"
           :imageUrl="(f: string) => imgSrc(t.view!.map.id, f)"
         />
         <div v-else-if="!t.view" class="empty">

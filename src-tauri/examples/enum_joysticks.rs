@@ -11,6 +11,10 @@
 
 fn main() -> Result<(), String> {
     let devices = bindsight_lib::input::enumerate()?;
+    if std::env::args().any(|a| a == "--json") {
+        println!("{}", serde_json::to_string_pretty(&devices).map_err(|e| e.to_string())?);
+        return Ok(());
+    }
     println!("{} joystick(s) connected\n", devices.len());
 
     for d in &devices {
@@ -22,6 +26,9 @@ fn main() -> Result<(), String> {
         } else if d.wine_gamepad {
             println!("    controller: (Wine rule, mapped like Wine), slot {:?}", d.gamepad_slot);
         }
+        println!("    instance:   {}", d.sdl_instance_id);
+        println!("    path:       {:?}", d.sdl_path);
+        println!("    serial:     {:?}", d.sdl_serial);
         println!("    SDL GUID:   {}", d.sdl_guid);
         println!(
             "    SC Product: {}",

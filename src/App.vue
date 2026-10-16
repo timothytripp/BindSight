@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, shallowRef, computed, onMounted, onUnmounted } from "vue";
+import { ref, shallowRef, computed, watch, onMounted, onUnmounted } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -14,7 +14,8 @@ import BindingsDeck from "./components/BindingsDeck.vue";
 import BindingsView from "./components/BindingsView.vue";
 import Toasts from "./components/Toasts.vue";
 import WindowEdges from "./components/WindowEdges.vue";
-import { deviceKey, deviceName } from "./devices";
+import { persistedRef } from "./persist";
+import { deviceKey, deviceName, liveDeviceKey, eventDeviceKey, joystickSlot, assignJoystickSlot } from "./devices";
 import Splitter from "./components/Splitter.vue";
 import SettingsDialog from "./components/SettingsDialog.vue";
 import StartupTile from "./components/StartupTile.vue";
@@ -202,7 +203,7 @@ const loadedMaps = ref<Record<string, ImageMap>>({});
 const mapImages = ref<Record<string, string>>({});
 // Lowercase hardware id -> chosen map id (from config.json).
 const mapChoices = ref<Record<string, string>>({});
-// SDL GUID -> the input keys currently active (held, or pulsing for an axis).
+// SDL GUID + instance -> the input keys currently active (held, or pulsing for an axis).
 const activeInputs = ref<Record<string, Record<string, true>>>({});
 const axisTimers = new Map<string, number>();
 
@@ -256,12 +257,12 @@ try {
 }
 
 function isStageHidden(d: DeviceInfo): boolean {
-  return !!d.hardware_id && stageHidden.value.includes(d.hardware_id.toLowerCase());
+  return !!d.hardware_id && stageHidden.value.includes(deviceKey(d));
 }
 
 function toggleStageHidden(d: DeviceInfo) {
   if (!d.hardware_id) return;
-  const id = d.hardware_id.toLowerCase();
+  const id = deviceKey(d);
   stageHidden.value = stageHidden.value.includes(id)
     ? stageHidden.value.filter((x) => x !== id)
     : [...stageHidden.value, id];
@@ -474,7 +475,7 @@ function inMap(sdlGuid: string, key: string): boolean | null {
 }
 
 function deviceOf(sdlGuid: string): DeviceInfo | undefined {
-  return devices.value.find((d) => d.sdl_guid === sdlGuid);
+  return devices.value.find((d) => liveDeviceKey(d) === sdlGuid);
 }
 
 // The device an event came from: SDL GUID plus instance id — two sticks of
@@ -497,7 +498,7 @@ function deviceForKind(b: ResolvedBinding): DeviceInfo | undefined {
   if (b.device_kind === "keyboard") return devices.value.find((d) => d.kind === "keyboard");
   if (b.device_kind === "gamepad") return devices.value.find((d) => d.kind === "gamepad" && d.gamepad_slot !== null);
   const guid = slotByInstance.value.get(b.instance)?.sc_product_guid;
-  return guid ? devices.value.find((d) => sameHardware(d.hardware_id, guid)) : undefined;
+  return guid ? devices.value.find((d) => slotForDevice(d)?.effective_instance === b.instance) : undefined;
 }
 
 // The image-map preview target for a device slot (Bindings tab overlay): the
@@ -510,7 +511,7 @@ function overlayFor(kind: DeviceKind, instance: number): OverlayTarget | null {
   else if (kind === "gamepad") device = devices.value.find((d) => d.kind === "gamepad" && d.gamepad_slot !== null);
   else {
     const guid = slotByInstance.value.get(instance)?.sc_product_guid;
-    device = guid ? devices.value.find((d) => sameHardware(d.hardware_id, guid)) : undefined;
+    device = guid ? devices.value.find((d) => slotForDevice(d)?.effective_instance === instance) : undefined;
   }
   if (!device) return null;
   const id = chosenMapId(device);
@@ -541,11 +542,11 @@ function resolvePin(b: ResolvedBinding): PinTarget | { reason: string } {
   if (!d) return { reason: `${b.device ?? "Device"} not connected` };
   const key = inputKeyForToken(b.token, d);
   if (!key) return { reason: `${tokenLabel(b.token)}: no such axis on ${deviceName(d)}${d.axes_error ? ` (${d.axes_error})` : ""}` };
-  const has = inMap(d.sdl_guid, key);
+  const has = inMap(liveDeviceKey(d), key);
   if (has === null) return { reason: `${deviceName(d)} has no image-map` };
   if (!has) return { reason: `No shape for ${tokenLabel(b.token)}` };
-  const keys = inputKeysForToken(b.token, d).filter((k) => inMap(d.sdl_guid, k));
-  return { guid: d.sdl_guid, key, keys };
+  const keys = inputKeysForToken(b.token, d).filter((k) => inMap(liveDeviceKey(d), k));
+  return { guid: liveDeviceKey(d), key, keys };
 }
 
 // The device has an image-map, but no area for this binding's input.
@@ -579,7 +580,7 @@ function flashBinding(b: ResolvedBinding) {
     actions: connectedBindings.value
       .filter((x) => x.token === b.token)
       .map((x) => ({ actionmap: x.actionmap, action: x.action, label: x.label, is_default: x.is_default, device_kind: x.device_kind })),
-    in_imagemap: target ? true : d && key ? inMap(d.sdl_guid, key) : null,
+    in_imagemap: target ? true : d && key ? inMap(liveDeviceKey(d), key) : null,
   };
 }
 
@@ -587,24 +588,24 @@ function flashBinding(b: ResolvedBinding) {
 function trackActive(p: JoyInput) {
   if (p.kind === "button" || p.kind === "padbutton" || p.kind === "key") {
     const key = p.kind === "button" ? `button:${p.index}` : `${p.kind === "key" ? "key" : "pad"}:${p.name}`;
-    if (p.pressed) setActive(p.guid, key);
-    else clearActive(p.guid, (k) => k === key);
+    if (p.pressed) setActive(eventDeviceKey(p), key);
+    else clearActive(eventDeviceKey(p), (k) => k === key);
     return;
   }
   if (p.kind === "hat") {
-    clearActive(p.guid, (k) => k.startsWith(`hat:${p.index}:`));
-    if (p.direction !== "centered") setActive(p.guid, `hat:${p.index}:${p.direction}`);
+    clearActive(eventDeviceKey(p), (k) => k.startsWith(`hat:${p.index}:`));
+    if (p.direction !== "centered") setActive(eventDeviceKey(p), `hat:${p.index}:${p.direction}`);
     return;
   }
   const key = p.kind === "axis" ? `axis:${p.index}` : `pad:${p.name}`;
-  setActive(p.guid, key);
-  const tk = `${p.guid}#${key}`;
+  setActive(eventDeviceKey(p), key);
+  const tk = `${eventDeviceKey(p)}#${key}`;
   const prev = axisTimers.get(tk);
   if (prev) clearTimeout(prev);
   axisTimers.set(
     tk,
     window.setTimeout(() => {
-      clearActive(p.guid, (k) => k === key);
+      clearActive(eventDeviceKey(p), (k) => k === key);
       axisTimers.delete(tk);
     }, AXIS_PULSE_MS),
   );
@@ -633,14 +634,14 @@ const heldDerived = new Map<string, Set<string>>();
 function trackHeld(p: JoyInput) {
   if (p.kind !== "key" && p.kind !== "padbutton") return;
   if (p.kind === "padbutton" && DERIVED_NAMES.has(p.name)) {
-    const set = heldDerived.get(p.guid) ?? new Set<string>();
+    const set = heldDerived.get(eventDeviceKey(p)) ?? new Set<string>();
     if (p.pressed) set.add(p.name);
     else set.delete(p.name);
-    heldDerived.set(p.guid, set);
+    heldDerived.set(eventDeviceKey(p), set);
     return;
   }
-  const rest = (heldNames.get(p.guid) ?? []).filter((n) => n !== p.name);
-  heldNames.set(p.guid, p.pressed ? [p.name, ...rest] : rest);
+  const rest = (heldNames.get(eventDeviceKey(p)) ?? []).filter((n) => n !== p.name);
+  heldNames.set(eventDeviceKey(p), p.pressed ? [p.name, ...rest] : rest);
 }
 
 // Is a button derived from this pad axis held right now?
@@ -687,7 +688,7 @@ function bindingCountFor(d: DeviceInfo): number {
   if (d.kind === "gamepad") {
     return d.gamepad_slot === null ? 0 : bindings.value.filter((b) => b.device_kind === "gamepad").length;
   }
-  const n = slotFor(d.sc_product_guid)?.effective_instance;
+  const n = slotForDevice(d)?.effective_instance;
   return n === undefined ? 0 : bindings.value.filter((b) => b.device_kind === "joystick" && b.instance === n).length;
 }
 
@@ -695,6 +696,34 @@ function bindingCountFor(d: DeviceInfo): number {
 // pad take no slot and are never "unseen".
 function deviceUnseen(d: DeviceInfo): boolean {
   return d.kind === "joystick" && isUnseen(d.sc_product_guid);
+}
+
+// Duplicate models require a user-confirmed slot; never infer identity from order.
+const slotChoices = persistedRef<Record<string, number>>("bindsight.joystick.slots", {});
+watch([devices, clash], () => {
+  const choices = { ...slotChoices.value };
+  let changed = false;
+  for (const d of devices.value.filter((d) => d.kind === "joystick")) {
+    const key = `model:${d.sc_product_guid?.toLowerCase()}`;
+    if (duplicateSlots(d).length && !choices[key]) { choices[key] = -1; changed = true; }
+  }
+  if (changed) slotChoices.value = choices;
+});
+
+function slotForDevice(d: DeviceInfo): SlotStatus | null {
+  if (d.kind !== "joystick") return null;
+  return joystickSlot(d, devices.value, clash.value?.connected ?? [], slotChoices.value);
+}
+function duplicateSlots(d: DeviceInfo): SlotStatus[] {
+  const candidates = (clash.value?.connected ?? []).filter((s) => sameHardware(s.sc_product_guid, d.sc_product_guid));
+  const peers = devices.value.filter((p) => p.kind === "joystick" && sameHardware(p.sc_product_guid, d.sc_product_guid));
+  return candidates.length > 1 || peers.length > 1 || slotChoices.value[`model:${d.sc_product_guid?.toLowerCase()}`] ? candidates : [];
+}
+function assignSlot(d: DeviceInfo, slot: number) {
+  slotChoices.value = assignJoystickSlot(d, devices.value, clash.value?.connected ?? [], slotChoices.value, slot);
+  activeInputs.value = {};
+  currentKey.value = null;
+  currentInput.value = null;
 }
 
 // Connected-slot status by GUID, from the clash report.
@@ -942,19 +971,15 @@ async function showBinding(p: JoyInput) {
   flash.value = null;
   try {
     if (p.kind === "button" || p.kind === "axis" || p.kind === "hat") {
-      const res = await invoke<InputResolution>("resolve_input", {
-        guid: p.guid,
-        kind: p.kind,
-        index: p.index,
-        direction: p.kind === "hat" ? p.direction : null,
-      });
+      const token = eventToken(p);
+      const res = token ? await invoke<InputResolution>("resolve_tokens", { candidates: [token] }) : { token: null, actions: [] };
       applyResolution(p, key, res);
       return;
     }
     // Keyboard and gamepad: SC folds modifiers into the token, so ask for the
     // combos with the other held names first and fall back to the plain token.
     const prefix = p.kind === "key" ? "kb1" : "gp1";
-    const others = (heldNames.get(p.guid) ?? []).filter((n) => n !== p.name);
+    const others = (heldNames.get(eventDeviceKey(p)) ?? []).filter((n) => n !== p.name);
     const candidates = [...others.map((n) => `${prefix}_${n}+${p.name}`), `${prefix}_${p.name}`];
     applyResolution(p, key, await invoke<InputResolution>("resolve_tokens", { candidates }));
   } catch {
@@ -964,20 +989,20 @@ async function showBinding(p: JoyInput) {
 
 function applyResolution(p: JoyInput, key: string, res: InputResolution) {
   const d = deviceOfEvent(p);
-  currentKey.value = { guid: p.guid, key };
+  currentKey.value = { guid: eventDeviceKey(p), key };
   currentInput.value = {
-    device: d ? deviceName(d) : p.guid,
+    device: d ? deviceName(d) : eventDeviceKey(p),
     kind: d?.kind ?? "joystick",
     sc_guid: d?.sc_product_guid ?? null,
     token: res.token,
     sdl: sdlInputName(p),
     actions: res.actions,
-    in_imagemap: inMap(p.guid, key),
+    in_imagemap: inMap(eventDeviceKey(p), key),
   };
   if (res.actions.length && currentInput.value.in_imagemap === false) {
     // One toast per input while it is on screen — hammering a button
     // must not stack them.
-    const tk = `${p.guid}#${key}`;
+    const tk = `${eventDeviceKey(p)}#${key}`;
     const now = Date.now();
     if (lastMissingToast.key !== tk || now - lastMissingToast.at > TOAST_MS) {
       lastMissingToast = { key: tk, at: now };
@@ -993,7 +1018,7 @@ function applyResolution(p: JoyInput, key: string, res: InputResolution) {
 function rebindToken(p: JoyInput): string | null {
   const token = eventToken(p);
   if (!token || (p.kind !== "key" && p.kind !== "padbutton" && p.kind !== "padaxis")) return token;
-  const others = (heldNames.get(p.guid) ?? []).filter((n) => n !== p.name);
+  const others = (heldNames.get(eventDeviceKey(p)) ?? []).filter((n) => n !== p.name);
   if (!others.length) return token;
   const prefix = p.kind === "key" ? "kb1" : "gp1";
   return `${prefix}_${[...others].reverse().join("+")}+${p.name}`;
@@ -1005,7 +1030,7 @@ function rebindToken(p: JoyInput): string | null {
 // diagonal or centre).
 function eventToken(p: JoyInput): string | null {
   const d = deviceOfEvent(p);
-  const js = () => slotFor(d?.sc_product_guid ?? null)?.effective_instance ?? null;
+  const js = () => (d ? slotForDevice(d) : null)?.effective_instance ?? null;
   switch (p.kind) {
     case "key":
       return `kb1_${p.name}`;
@@ -1060,10 +1085,10 @@ function onInput(p: JoyInput) {
       if (p.direction !== "centered") showBinding(p);
       break;
     case "axis":
-      if (axisDue(p.guid, `axis:${p.index}`)) showBinding(p);
+      if (axisDue(eventDeviceKey(p), `axis:${p.index}`)) showBinding(p);
       break;
     case "padaxis":
-      if (!derivedHeld(p.guid, p.name) && axisDue(p.guid, `pad:${p.name}`)) showBinding(p);
+      if (!derivedHeld(eventDeviceKey(p), p.name) && axisDue(eventDeviceKey(p), `pad:${p.name}`)) showBinding(p);
       break;
   }
 }
@@ -1190,7 +1215,7 @@ async function refresh() {
 // What tells two device lists apart: the same devices on the same SDL
 // indices with the same slots.
 function deviceListKey(list: DeviceInfo[]): string {
-  return JSON.stringify(list.map((d) => [d.index, d.sdl_guid, d.kind, d.gamepad_slot ?? null]));
+  return JSON.stringify(list.map((d) => [d.index, liveDeviceKey(d), deviceKey(d), d.kind, d.gamepad_slot ?? null]));
 }
 
 // Hot-plug (and startup): re-list the devices and redo the clash report on
@@ -1477,7 +1502,9 @@ onUnmounted(() => {
           v-for="d in monitorDevices"
           :key="d.index"
           :device="d"
-          :slot="slotFor(d.sc_product_guid)"
+          :slot="slotForDevice(d)"
+          :slotOptions="duplicateSlots(d)"
+          @assignSlot="assignSlot(d, $event)"
           :noOrder="d.kind === 'joystick' && noOrder"
           :bindingCount="bindingCountFor(d)"
           :hidden="isStageHidden(d)"
