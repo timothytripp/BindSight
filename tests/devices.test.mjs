@@ -7,7 +7,7 @@ import ts from 'typescript';
 // TypeScript, so the regression suite needs no additional test dependencies.
 const source = await readFile(new URL('../src/devices.ts', import.meta.url), 'utf8');
 const { outputText } = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext } });
-const { deviceKey, liveDeviceKey, eventDeviceKey, inputIdentity, joystickSlot, assignJoystickSlot } =
+const { deviceKey, liveDeviceKey, eventDeviceKey, inputIdentity, joystickSlot, assignJoystickSlot, mapChoice } =
   await import(`data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`);
 
 const device = (id, path, hats = 1) => ({
@@ -73,4 +73,15 @@ test('unique serials can remember choices without an OS path', () => {
 test('existing unique devices resolve automatically and unknown products do not', () => {
   assert.equal(joystickSlot(a, [a], [slots[0]], {})?.effective_instance, 1);
   assert.equal(joystickSlot(a, [a], [{ ...slots[0], sc_product_guid: 'other' }], {}), null);
+});
+
+test('image-map choices are per unit and retain legacy model choices as fallbacks', () => {
+  const x = { ...a, hardware_id: 'PRODUCT' }, y = { ...b, hardware_id: 'PRODUCT' };
+  const choices = { product: 'legacy-map', [deviceKey(x)]: 'joystick-map' };
+  assert.equal(mapChoice(x, choices), 'joystick-map');
+  assert.equal(mapChoice(y, choices), 'legacy-map');
+  choices[deviceKey(y)] = 'throttle-map';
+  assert.equal(mapChoice(x, choices), 'joystick-map');
+  assert.equal(mapChoice(y, choices), 'throttle-map');
+  assert.equal(mapChoice({ ...x, index: 0, sdl_instance_id: 99 }, choices), 'joystick-map');
 });

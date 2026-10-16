@@ -15,7 +15,7 @@ import BindingsView from "./components/BindingsView.vue";
 import Toasts from "./components/Toasts.vue";
 import WindowEdges from "./components/WindowEdges.vue";
 import { persistedRef } from "./persist";
-import { deviceKey, deviceName, liveDeviceKey, eventDeviceKey, joystickSlot, assignJoystickSlot } from "./devices";
+import { deviceKey, deviceName, liveDeviceKey, eventDeviceKey, joystickSlot, assignJoystickSlot, mapChoice } from "./devices";
 import Splitter from "./components/Splitter.vue";
 import SettingsDialog from "./components/SettingsDialog.vue";
 import StartupTile from "./components/StartupTile.vue";
@@ -201,7 +201,7 @@ const mapSummaries = ref<ImageMapSummary[]>([]);
 // Map id -> full image-map, and `<map id>/<file>` -> image data URL.
 const loadedMaps = ref<Record<string, ImageMap>>({});
 const mapImages = ref<Record<string, string>>({});
-// Lowercase hardware id -> chosen map id (from config.json).
+// Device key (legacy: lowercase hardware id) -> chosen map id.
 const mapChoices = ref<Record<string, string>>({});
 // SDL GUID + instance -> the input keys currently active (held, or pulsing for an axis).
 const activeInputs = ref<Record<string, Record<string, true>>>({});
@@ -217,7 +217,7 @@ function chosenMapId(d: DeviceInfo | null | undefined): string | null {
   const hardwareId = d?.hardware_id ?? null;
   const list = mapsFor(hardwareId);
   if (!list.length) return null;
-  const pick = hardwareId ? mapChoices.value[hardwareId.toLowerCase()] : undefined;
+  const pick = d ? mapChoice(d, mapChoices.value) : undefined;
   const chosen = list.find((s) => s.id === pick);
   if (chosen) return chosen.id;
   const fallback = d ? defaultMapId(d, list) : undefined;
@@ -425,11 +425,12 @@ async function setMode(m: Mode) {
   if (m === "devices") await loadDeviceInfo();
 }
 
-async function setMapChoice(hardwareId: string | null, id: string) {
-  if (!hardwareId) return;
+async function setMapChoice(d: DeviceInfo, id: string) {
+  if (!d.hardware_id) return;
   try {
     const cfg = await invoke<{ imagemap_choices: Record<string, string> }>("set_imagemap_choice", {
-      hardwareId,
+      hardwareId: d.hardware_id,
+      deviceKey: deviceKey(d),
       imagemapId: id || null,
     });
     mapChoices.value = cfg.imagemap_choices;

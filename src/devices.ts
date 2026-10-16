@@ -85,6 +85,10 @@ export function liveDeviceKey(d: DeviceInfo): string {
   return `${d.sdl_guid}#${d.sdl_instance_id}`;
 }
 
+export function mapChoice(d: DeviceInfo, choices: Record<string, string>): string | undefined {
+  return choices[deviceKey(d)] ?? (d.hardware_id ? choices[d.hardware_id.toLowerCase()] : undefined);
+}
+
 export function eventDeviceKey(ev: JoyInput): string {
   return `${ev.guid}#${ev.instance_id}`;
 }

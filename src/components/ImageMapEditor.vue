@@ -73,7 +73,7 @@ const emit = defineEmits<{
   notify: [message: string, type: ToastType];
   saved: [];
   clearLog: [];
-  choose: [hardwareId: string | null, id: string];
+  choose: [device: DeviceInfo, id: string];
 }>();
 
 // No active tool == select/move mode. The image tool never stays active:
@@ -939,7 +939,7 @@ function startEdit() {
 function useForDevice() {
   const d = device.value;
   if (!d || !openId.value || isChosen.value) return;
-  emit("choose", d.hardware_id, openId.value);
+  emit("choose", d, openId.value);
 }
 
 // Leaving edit mode: the same Save/Discard/Cancel question as switching away,

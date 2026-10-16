@@ -11,7 +11,9 @@ serials when no path exists; missing or shared identities allow session-only
 choices. Choices are scoped to the game's slot map and connected units of that
 model. Changed sets or maps require verification; returning to the same set
 restores its choices. A model known to have duplicates keeps requiring selection
-when only one unit remains. Image-map compatibility remains model-based.
+when only one unit remains. Image-map compatibility remains model-based, but
+each unit remembers its own selected map. Existing model-level map choices
+remain fallbacks until a unit-specific map is selected.
 
 Paths can change after driver, USB port, or Linux enumeration changes.
 Product-only game records cannot reveal a swap between identical units, so

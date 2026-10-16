@@ -110,7 +110,7 @@ pub struct HidInterface {
 pub struct DeviceInfo {
     /// Joystick, gamepad, or the synthetic keyboard.
     pub kind: DeviceKind,
-    /// The key for image-maps and `imagemap_choices`: a joystick's SC Product
+    /// The compatibility key for image-maps: a joystick's SC Product
     /// GUID, the fixed `"gamepad"` for the pad holding the `gp1` slot, the
     /// fixed `"keyboard"`, and `None` for anything that cannot be bound
     /// (a further pad, a joystick with an unparseable GUID).
