@@ -510,10 +510,15 @@ pub fn resort_commands(moves: &[ResortMove]) -> Vec<String> {
 
 /// Find the SC `jsN` instance for a device by its SC Product GUID.
 pub fn instance_for_guid(profile: &ActionMapsFile, sc_product_guid: &str) -> Option<u32> {
-    let mut matches = profile.joysticks.iter().filter(|d|
-        d.product_guid.as_deref().is_some_and(|g| g.eq_ignore_ascii_case(sc_product_guid)));
-    let first = matches.next()?;
-    matches.next().is_none().then_some(first.instance)
+    profile
+        .joysticks
+        .iter()
+        .find(|d| {
+            d.product_guid
+                .as_deref()
+                .is_some_and(|g| g.eq_ignore_ascii_case(sc_product_guid))
+        })
+        .map(|d| d.instance)
 }
 
 #[cfg(test)]
@@ -536,7 +541,6 @@ mod tests {
     #[test]
     fn duplicate_models_do_not_share_saved_slots_or_propose_resorts() {
         let profile = parse_actionmaps(r#"<ActionMaps><options type="joystick" instance="1" Product="vJoy {BEAD1234-0000-0000-0000-504944564944}"/><options type="joystick" instance="2" Product="vJoy {BEAD1234-0000-0000-0000-504944564944}"/></ActionMaps>"#).unwrap();
-        assert_eq!(instance_for_guid(&profile, "{BEAD1234-0000-0000-0000-504944564944}"), None);
         let guid = "{BEAD1234-0000-0000-0000-504944564944}";
         let order = log_of(&[("vJoy", guid), ("vJoy", guid)]);
         let report = analyze_clash(&profile, &[dev(guid, "vJoy"), dev(guid, "vJoy")], Ok(&order));

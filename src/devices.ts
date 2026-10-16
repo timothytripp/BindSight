@@ -75,8 +75,6 @@ export const KIND_RANK: Record<DeviceKind, number> = { keyboard: 0, gamepad: 1, 
 const session = crypto.randomUUID();
 export function deviceKey(d: DeviceInfo): string {
   if (d.kind === "keyboard") return "keyboard";
-  // Paths distinguish identical devices, including devices with duplicate
-  // serials. Neither an enumeration index nor capabilities identify a unit.
   const path = d.sdl_path?.trim();
   return path
     ? JSON.stringify([d.sdl_guid.toLowerCase(), "path", path.startsWith("\\\\") ? path.toLowerCase() : path])

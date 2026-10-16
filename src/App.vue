@@ -991,7 +991,7 @@ function applyResolution(p: JoyInput, key: string, res: InputResolution) {
   const d = deviceOfEvent(p);
   currentKey.value = { guid: eventDeviceKey(p), key };
   currentInput.value = {
-    device: d ? deviceName(d) : eventDeviceKey(p),
+    device: d ? deviceName(d) : p.guid,
     kind: d?.kind ?? "joystick",
     sc_guid: d?.sc_product_guid ?? null,
     token: res.token,
