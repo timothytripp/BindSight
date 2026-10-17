@@ -46,6 +46,7 @@ import {
 // Keys never reach the backend: App hands them to `takeInput` directly.
 const props = defineProps<{
   devices: DeviceInfo[];
+  deviceLabel: (d: DeviceInfo) => string;
   events: LoggedInput[];
   // The image-map the Monitor shows for a device (the user's pick or the default).
   chosenMapId: (d: DeviceInfo) => string | null;
@@ -2315,7 +2316,7 @@ function noMaps(d: DeviceInfo): boolean {
             >
               <div class="dev-name">
                 <Icon :name="deviceIcon(d)" :size="15" class="dev-kind" />
-                <span>{{ deviceName(d) }}</span>
+                <span>{{ deviceLabel(d) }}</span>
               </div>
               <div class="dev-line">
                 {{ deviceLine(d) }}
@@ -2503,7 +2504,7 @@ function noMaps(d: DeviceInfo): boolean {
             <div v-for="d in props.devices" :key="d.index" class="log-dev">
               <div class="log-line">
                 <span class="log-key">sdl #{{ d.index }}</span>
-                <span class="log-name">{{ deviceName(d) }}</span>
+                <span class="log-name">{{ deviceLabel(d) }}</span>
               </div>
               <div v-for="[k, v] in deviceRows(d)" :key="k" class="log-kv">
                 <span class="log-dim">{{ k }}</span>

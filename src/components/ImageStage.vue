@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import DeviceImage from "./DeviceImage.vue";
-import { liveDeviceKey, deviceKey, deviceName } from "../devices";
+import { liveDeviceKey, deviceKey } from "../devices";
 import Icon from "./Icon.vue";
 import Splitter from "./Splitter.vue";
 import { persistedRef } from "../persist";
@@ -10,6 +10,7 @@ import type { DeviceInfo, ImageMapView } from "../types";
 
 const props = defineProps<{
   views: ImageMapView[];
+  deviceLabel: (d: DeviceInfo) => string;
   // Connected devices without an image-map: shown as placeholder tiles.
   placeholders: DeviceInfo[];
   // Device keys in the app's display order — the tile order until the user
@@ -194,7 +195,7 @@ function onReset(i: number) {
       <Splitter v-if="i > 0" direction="col" @drag="onDrag(i - 1, $event)" @end="onEnd" @reset="onReset(i - 1)" />
       <div class="tile" :class="{ placeholder: !t.view }" :style="tileStyle(deviceKey(t.device), shares[i] ?? 1)">
         <div class="caption">
-          <span class="name">{{ deviceName(t.device) }}</span>
+          <span class="name">{{ deviceLabel(t.device) }}</span>
           <button v-if="i > 0" type="button" class="move" title="Move left" @click="swap(i - 1)">
             <Icon name="arrow-left" :size="14" />
           </button>

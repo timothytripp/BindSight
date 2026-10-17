@@ -46,7 +46,7 @@ const kindChip = computed(() => {
   return props.device.kind === "gamepad" && !noSlot.value ? "gp1" : null;
 });
 
-const name = computed(() => deviceName(props.device));
+const name = computed(() => deviceName(props.device, props.slot?.effective_instance));
 
 const state = computed(() => {
   const d = props.device;

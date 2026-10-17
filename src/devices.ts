@@ -52,9 +52,9 @@ export function inputIdentity(ev: JoyInput): string {
 
 // The name a device is shown under: pads carry SDL's controller name, the
 // rest SC's HID product string with SDL's name as the fallback.
-export function deviceName(d: Pick<DeviceInfo, "kind" | "controller_name" | "sc_name" | "sdl_name">): string {
+export function deviceName(d: Pick<DeviceInfo, "kind" | "controller_name" | "sc_name" | "sdl_name">, instance?: number | null): string {
   if (d.kind === "gamepad") return d.controller_name ?? d.sc_name ?? d.sdl_name;
-  return d.sc_name ?? d.sdl_name;
+  return (d.sc_name ?? d.sdl_name) + (d.kind === "joystick" && instance ? ` js${instance}` : "");
 }
 
 // The icon for a device's kind (Icon names); the Devices icon is a joystick.

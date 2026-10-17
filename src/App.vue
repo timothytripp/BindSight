@@ -572,7 +572,7 @@ function flashBinding(b: ResolvedBinding) {
   const key = d ? inputKeyForToken(b.token, d) : null;
   currentKey.value = target ? { guid: target.guid, key: target.key } : null;
   currentInput.value = {
-    device: d ? deviceName(d) : (b.device ?? "—"),
+    device: d ? deviceDisplayName(d) : (b.device ?? "—"),
     kind: b.device_kind,
     sc_guid: b.device_guid,
     token: b.token,
@@ -714,6 +714,9 @@ watch([devices, clash], () => {
 function slotForDevice(d: DeviceInfo): SlotStatus | null {
   if (d.kind !== "joystick") return null;
   return joystickSlot(d, devices.value, clash.value?.connected ?? [], slotChoices.value);
+}
+function deviceDisplayName(d: DeviceInfo): string {
+  return deviceName(d, slotForDevice(d)?.effective_instance);
 }
 function duplicateSlots(d: DeviceInfo): SlotStatus[] {
   const candidates = (clash.value?.connected ?? []).filter((s) => sameHardware(s.sc_product_guid, d.sc_product_guid));
@@ -992,7 +995,7 @@ function applyResolution(p: JoyInput, key: string, res: InputResolution) {
   const d = deviceOfEvent(p);
   currentKey.value = { guid: eventDeviceKey(p), key };
   currentInput.value = {
-    device: d ? deviceName(d) : p.guid,
+    device: d ? deviceDisplayName(d) : p.guid,
     kind: d?.kind ?? "joystick",
     sc_guid: d?.sc_product_guid ?? null,
     token: res.token,
@@ -1533,6 +1536,7 @@ onUnmounted(() => {
       </div>
 
       <ImageStage
+        :deviceLabel="deviceDisplayName"
         :views="mapViews"
         :sequence="orderedDevices.map(deviceKey)"
         :placeholders="stagePlaceholders"
@@ -1596,6 +1600,7 @@ onUnmounted(() => {
       :key="activeEnv"
       ref="editor"
       :devices="orderedDevices"
+      :deviceLabel="deviceDisplayName"
       :events="events"
       :chosenMapId="chosenMapId"
       :tokenLabel="tokenLabel"
