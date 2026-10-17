@@ -723,6 +723,13 @@ function duplicateSlots(d: DeviceInfo): SlotStatus[] {
   const peers = devices.value.filter((p) => p.kind === "joystick" && sameHardware(p.sc_product_guid, d.sc_product_guid));
   return candidates.length > 1 || peers.length > 1 || slotChoices.value[`model:${d.sc_product_guid?.toLowerCase()}`] ? candidates : [];
 }
+const monitorReport = computed(() => {
+  const report = clash.value;
+  if (!report?.identity_warning) return report;
+  const duplicates = devices.value.filter((d) => d.kind === "joystick" && duplicateSlots(d).length);
+  return duplicates.length && duplicates.every((d) => slotForDevice(d))
+    ? { ...report, identity_warning: null } : report;
+});
 function assignSlot(d: DeviceInfo, slot: number) {
   slotChoices.value = assignJoystickSlot(d, devices.value, clash.value?.connected ?? [], slotChoices.value, slot);
   activeInputs.value = {};
@@ -1529,7 +1536,7 @@ onUnmounted(() => {
         </ScrollRail>
       </div>
       <StatusPanel
-        :report="clash"
+        :report="monitorReport"
         :loadError="error"
         :sc="scStatus"
         @apply="applyResort"
