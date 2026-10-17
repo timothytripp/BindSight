@@ -429,7 +429,7 @@ pub fn analyze_clash(
         unseen,
         log_timestamp: None,
         order_error: None,
-        identity_warning: ambiguous.then(|| "Identical joystick models: choose and verify each device's jsN in Input Devices. Automatic device-order fixes are unavailable because the game's Product GUIDs do not identify individual units.".into()),
+        identity_warning: ambiguous.then(|| "Identical joysticks detected. For each of them, choose a unique identifier like js1 or js2 from the list.".into()),
         has_clash,
         resort,
         resort_commands,
