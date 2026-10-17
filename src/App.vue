@@ -773,6 +773,13 @@ function deviceRank(d: DeviceInfo): number {
 const orderedDevices = computed<DeviceInfo[]>(() =>
   [...devices.value].sort((a, b) => deviceRank(a) - deviceRank(b) || a.index - b.index),
 );
+const editorDevices = computed(() => {
+  const list = orderedDevices.value;
+  const group = (d: DeviceInfo) => list.findIndex((p) => p.kind === d.kind && deviceName(p) === deviceName(d));
+  return [...list].sort((a, b) => group(a) - group(b)
+    || (slotForDevice(a)?.effective_instance ?? Infinity) - (slotForDevice(b)?.effective_instance ?? Infinity)
+    || a.index - b.index);
+});
 // The Monitor's device rail: a joystick the game does not see stays out of
 // it (only the Device List says so).
 const monitorDevices = computed<DeviceInfo[]>(() =>
@@ -1599,7 +1606,7 @@ onUnmounted(() => {
       v-else-if="mode === 'devices'"
       :key="activeEnv"
       ref="editor"
-      :devices="orderedDevices"
+      :devices="editorDevices"
       :deviceLabel="deviceDisplayName"
       :events="events"
       :chosenMapId="chosenMapId"
