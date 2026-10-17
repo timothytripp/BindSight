@@ -815,7 +815,8 @@ watch(
 // --- device / map switching -----------------------------------------------
 
 async function openFirst() {
-  const first = deviceMaps.value[0]?.id;
+  const chosen = device.value ? props.chosenMapId(device.value) : null;
+  const first = deviceMaps.value.find((s) => s.id === chosen)?.id ?? deviceMaps.value[0]?.id;
   if (first) await loadMap(first);
 }
 
