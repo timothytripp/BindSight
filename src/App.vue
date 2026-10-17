@@ -763,7 +763,7 @@ function isUnseen(guid: string | null): boolean {
 
 // Display order everywhere a device list is shown: the keyboard, the slotted
 // pad, the joysticks SC sees, then everything SC does not (unseen, pads
-// without a slot) — SDL order within a group.
+// without a slot) — assigned joystick slot, then SDL order within a group.
 function deviceRank(d: DeviceInfo): number {
   if (d.kind === "keyboard") return 0;
   if (d.kind === "gamepad" && d.gamepad_slot === null) return 3;
@@ -771,15 +771,10 @@ function deviceRank(d: DeviceInfo): number {
   return d.kind === "gamepad" ? 1 : 2;
 }
 const orderedDevices = computed<DeviceInfo[]>(() =>
-  [...devices.value].sort((a, b) => deviceRank(a) - deviceRank(b) || a.index - b.index),
-);
-const editorDevices = computed(() => {
-  const list = orderedDevices.value;
-  const group = (d: DeviceInfo) => list.findIndex((p) => p.kind === d.kind && deviceName(p) === deviceName(d));
-  return [...list].sort((a, b) => group(a) - group(b)
+  [...devices.value].sort((a, b) => deviceRank(a) - deviceRank(b)
     || (slotForDevice(a)?.effective_instance ?? Infinity) - (slotForDevice(b)?.effective_instance ?? Infinity)
-    || a.index - b.index);
-});
+    || a.index - b.index),
+);
 // The Monitor's device rail: a joystick the game does not see stays out of
 // it (only the Device List says so).
 const monitorDevices = computed<DeviceInfo[]>(() =>
@@ -1606,7 +1601,7 @@ onUnmounted(() => {
       v-else-if="mode === 'devices'"
       :key="activeEnv"
       ref="editor"
-      :devices="editorDevices"
+      :devices="orderedDevices"
       :deviceLabel="deviceDisplayName"
       :events="events"
       :chosenMapId="chosenMapId"
